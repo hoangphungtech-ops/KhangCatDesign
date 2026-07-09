@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 const { config, emailConfigured } = require("./config");
 
 let smtpTransport;
@@ -10,6 +11,26 @@ function fromParts(value) {
   return match
     ? { name: match[1] || "KHANGCAT Design", email: match[2] }
     : { name: "KHANGCAT Design", email: String(value).trim() };
+}
+
+async function resend(message) {
+  const resendClient = new Resend(config.resendApiKey);
+
+  const response = await resendClient.emails.send({
+    from: config.emailFrom || "KHANGCAT Design <onboarding@resend.dev>",
+    to: Array.isArray(message.to) ? message.to : [message.to],
+    replyTo: message.replyTo,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+    tags: [{ name: "event", value: message.tag || "lead-notification" }],
+  });
+
+  if (response.error) {
+    throw new Error(`Resend: ${response.error.message}`);
+  }
+
+  return response.data;
 }
 
 async function postmark(message) {
@@ -74,6 +95,7 @@ async function smtp(message) {
       maxMessages: 100,
     });
   }
+
   return smtpTransport.sendMail({
     from: config.emailFrom,
     to: message.to,
@@ -98,15 +120,19 @@ async function sendEmail(message) {
   if (!emailConfigured()) {
     throw new Error(`Email provider '${config.emailProvider}' chưa được cấu hình.`);
   }
+
+  if (config.emailProvider === "resend") return resend(message);
   if (config.emailProvider === "postmark") return postmark(message);
   if (config.emailProvider === "sendgrid") return sendgrid(message);
   if (config.emailProvider === "console") return consoleEmail(message);
+
   return smtp(message);
 }
 
 async function verifyEmailProvider() {
   if (!emailConfigured()) return false;
   if (config.emailProvider !== "smtp") return true;
+
   if (!smtpTransport) {
     smtpTransport = nodemailer.createTransport({
       host: config.smtp.host,
@@ -115,6 +141,7 @@ async function verifyEmailProvider() {
       auth: { user: config.smtp.user, pass: config.smtp.pass },
     });
   }
+
   await smtpTransport.verify();
   return true;
 }

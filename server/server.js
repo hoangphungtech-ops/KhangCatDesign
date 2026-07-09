@@ -3,7 +3,7 @@ const { createApp, shutdown } = require("./src/app");
 
 async function main() {
   const app = await createApp();
-  const server = app.listen(config.port, () => {
+  app.listen(config.port, "0.0.0.0", () => {
     console.log(`KHANGCAT platform: http://localhost:${config.port}`);
     console.log(
       `DB=${config.dbDriver} Queue=${config.queueDriver} Email=${config.emailProvider}`,
